@@ -11,21 +11,30 @@ class SongsService {
   }
 
   async addSong({ title, year, genre, performer, duration, albumId }) {
-    const id = nanoid(16);
-
+    if (albumId) {
+      const albumQuery = {
+        text: 'SELECT id FROM albums WHERE id = $1',
+        values: [albumId],
+      };
+      const albumResult = await this._pool.query(albumQuery);
+      if (!albumResult.rows.length) {
+        throw new NotFoundError('Album tidak ditemukan');
+      }
+    }
+  
+    const id = `song-${nanoid(16)}`;
     const query = {
       text: 'INSERT INTO songs VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING id',
       values: [id, title, year, genre, performer, duration, albumId],
     };
-
+  
     const result = await this._pool.query(query);
-
-    if (!result.rows[0].id) {
-      throw new InvariantError('Song gagal ditambahkan');
+    if (!result.rows.length) {
+      throw new InvariantError('Lagu gagal ditambahkan');
     }
-
     return result.rows[0].id;
   }
+  
 
   async getSongs(filters = {}) {
     let queryText = 'SELECT * FROM songs';
