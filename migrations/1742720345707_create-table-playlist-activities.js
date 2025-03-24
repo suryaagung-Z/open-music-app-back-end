@@ -17,20 +17,14 @@ exports.up = (pgm) => {
     playlist_id: {
       type: 'VARCHAR(50)',
       notNull: true,
-      references: '"playlists"(id)',
-      onDelete: 'CASCADE',
     },
     user_id: {
       type: 'VARCHAR(50)',
       notNull: true,
-      references: '"users"(id)',
-      onDelete: 'CASCADE',
     },
     song_id: {
       type: 'VARCHAR(50)',
       notNull: true,
-      references: '"songs"(id)',
-      onDelete: 'CASCADE',
     },
     action: {
       type: 'TEXT',
@@ -42,6 +36,10 @@ exports.up = (pgm) => {
       default: pgm.func('CURRENT_TIMESTAMP'),
     },
   });
+
+  pgm.addConstraint('playlist_activities', 'fk_playlist_activities.playlist_id_playlists.id', 'FOREIGN KEY(playlist_id) REFERENCES playlists(id) ON DELETE CASCADE');
+  pgm.addConstraint('playlist_activities', 'fk_playlist_activities.user_id_users.id', 'FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE');
+  pgm.addConstraint('playlist_activities', 'fk_playlist_activities.song_id_songs.id', 'FOREIGN KEY(song_id) REFERENCES songs(id) ON DELETE CASCADE');
 };
 
 /**
