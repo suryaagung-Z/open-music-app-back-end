@@ -1,5 +1,4 @@
 node_modules
 postman
 .env
-package-lock.json
 src/api/albums/uploads
