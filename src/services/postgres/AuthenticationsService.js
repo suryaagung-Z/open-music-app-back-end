@@ -1,7 +1,6 @@
 const { Pool } = require('pg');
 const InvariantError = require('../../exceptions/InvariantError');
 
-// eslint-disable-next-line no-unused-vars
 class AuthenticationsService {
   constructor() {
     this._pool = new Pool();

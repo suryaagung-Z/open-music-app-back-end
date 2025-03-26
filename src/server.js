@@ -2,6 +2,9 @@ require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
 const Jwt = require('@hapi/jwt');
+const Inert = require('@hapi/inert');
+const config = require('./utils/config');
+const path = require('path');
 
 const songs = require('./api/songs');
 const SongsService = require('./services/postgres/SongsService');
@@ -27,13 +30,26 @@ const collaborations = require('./api/collaborations');
 const CollaborationsService = require('./services/postgres/CollaborationsService');
 const CollaborationsValidator = require('./validator/collaborations');
 
+const _exports = require('./api/exports');
+const ProducerService = require('./services/rabbitmq/ProducerService');
+const ExportsValidator = require('./validator/exports');
+
 const playlistActivities = require('./api/playlist-activities');
 const PlaylistActivitiesService = require('./services/postgres/PlaylistActivitiesService');
+
+const CacheService = require('./services/redis/CacheService');
+
+const LikesService = require('./services/postgres/LikesService');
+
+const StorageService = require('./services/storage/StorageService');
+
+const UploadsValidator = require('./validator/uploads');
 
 const ClientError = require('./exceptions/ClientError');
 const TokenManager = require('./tokenize/TokenManager');
 
 const init = async () => {
+  const cacheService = new CacheService();
   const albumsService = new AlbumsService();
   const songsService = new SongsService();
   const collaborationsService = new CollaborationsService();
@@ -41,10 +57,12 @@ const init = async () => {
   const playlistsService = new PlaylistsService(collaborationsService, playlistActivitiesService);
   const usersService = new UsersService();
   const authenticationsService = new AuthenticationsService();
+  const likesService = new LikesService(cacheService);
+  const storageService = new StorageService(path.resolve(__dirname, 'api/albums/uploads'));
 
   const server = Hapi.server({
-    port: process.env.PORT,
-    host: process.env.HOST,
+    port: config.app.port,
+    host: config.app.host,
     routes: {
       cors: {
         origin: ['*'],
@@ -56,15 +74,18 @@ const init = async () => {
     {
       plugin: Jwt,
     },
+    {
+      plugin: Inert,
+    },
   ]);
 
   server.auth.strategy('openmusic_jwt', 'jwt', {
-    keys: process.env.ACCESS_TOKEN_KEY,
+    keys: config.token.access,
     verify: {
       aud: false,
       iss: false,
       sub: false,
-      maxAgeSec: process.env.ACCESS_TOKEN_AGE,
+      maxAgeSec: config.token.age,
     },
     validate: (artifacts) => ({
       isValid: true,
@@ -85,7 +106,7 @@ const init = async () => {
     {
       plugin: authentications,
       options: {
-        authenticationsService,
+        service: authenticationsService,
         usersService,
         tokenManager: TokenManager,
         validator: AuthenticationsValidator,
@@ -95,7 +116,10 @@ const init = async () => {
       plugin: albums,
       options: {
         service: albumsService,
-        validator: AlbumsValidator,
+        albumsValidator: AlbumsValidator,
+        uploadsValidator: UploadsValidator,
+        storageService, 
+        likesService,
       },
     },
     {
@@ -116,17 +140,25 @@ const init = async () => {
       plugin: collaborations,
       options: {
         service: collaborationsService,
-        playlistsService: playlistsService,
+        playlistsService,
         validator: CollaborationsValidator,
       },
     },    
     {
       plugin: playlistActivities,
       options: {
-        playlistActivitiesService: playlistActivitiesService,
-        playlistsService: playlistsService,
+        service: playlistActivitiesService,
+        playlistsService,
       },
-    },    
+    },
+    {
+      plugin: _exports,
+      options: {
+        service: ProducerService,
+        playlistsService,
+        validator: ExportsValidator,
+      },
+    }, 
   ]);
 
   server.ext('onPreResponse', (request, h) => {

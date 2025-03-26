@@ -13,8 +13,8 @@ class AlbumsService {
     const id = nanoid(16);
 
     const query = {
-      text: 'INSERT INTO albums VALUES($1, $2, $3) RETURNING id',
-      values: [id, name, year],
+      text: 'INSERT INTO albums VALUES($1, $2, $3, $4) RETURNING id',
+      values: [id, name, year, null],
     };
 
     const result = await this._pool.query(query);
@@ -31,12 +31,11 @@ class AlbumsService {
     return result.rows.map(mapDBToAlbumListModel);
   }
 
-
   async getAlbumById(id) {
     const query = {
       text: `
         SELECT 
-          a.id, a.name, a.year, 
+          a.id, a.name, a.year, a.cover,
           s.id AS song_id, s.title AS song_title, s.performer AS song_performer
         FROM albums a
         LEFT JOIN songs s ON a.id = s.album_id
@@ -52,16 +51,17 @@ class AlbumsService {
     }
   
     const songs = result.rows
-    .filter(row => row.song_id)
-    .map(row => ({
-      id: row.song_id,
-      title: row.song_title,
-      performer: row.song_performer,
-    }));
+      .filter(row => row.song_id)
+      .map(row => ({
+        id: row.song_id,
+        title: row.song_title,
+        performer: row.song_performer,
+      }));
   
-    result.rows[0].songs = songs;
-  
-    return result.rows.map(mapDBToAlbumDetailModel)[0];
+    return mapDBToAlbumDetailModel({
+      ...result.rows[0],
+      songs,
+    });
   }
 
   async editAlbumById(id, { name, year }) {
@@ -87,6 +87,18 @@ class AlbumsService {
 
     if (!result.rows.length) {
       throw new NotFoundError('Album gagal dihapus. Id tidak ditemukan');
+    }
+  }
+
+  async updateAlbumCover(id, coverUrl) {
+    const query = {
+      text: 'UPDATE albums SET cover = $1 WHERE id = $2 RETURNING id',
+      values: [coverUrl, id],
+    };
+
+    const result = await this._pool.query(query);
+    if (!result.rows.length) {
+      throw new NotFoundError('Album tidak ditemukan');
     }
   }
 }
